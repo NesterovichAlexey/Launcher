@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <CheckBoxPreference
+        android:key="hide_favorites"
+        android:title="Скрыть раздел “Избранные приложения”"/>
+
+    <Preference
+        android:key="clear_favorites"
+        android:title="Очистить список “Избранные приложения”"/>
+
+    <ListPreference
+        android:key="theme"
+        android:title="Тема оформления"
+        android:entries="@array/theme_entries"
+        android:entryValues="@array/theme_entry_values"/>
+
+    <ListPreference
+        android:key="column_count"
+        android:title="Количество елементов в ряду"
+        android:entries="@array/column_count_entries"
+        android:entryValues="@array/column_count_entry_values"/>
+
+    <EditTextPreference
+        android:key="uri_count"
+        android:inputType="number"
+        android:maxLength="8"
+        android:title="Количество запоминаемых uri"/>
+
+    <Preference
+        android:key="clear_uri_history"
+        android:title="Очистить историю введенных uri"/>
+
+</PreferenceScreen>
