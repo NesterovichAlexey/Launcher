@@ -41,7 +41,7 @@ public class WelcomeActivity extends AppCompatActivity {
                     preferences.edit().putString("theme", isLight ? "light" : "dark").apply();
                     preferences.edit().putBoolean("hide_welcome_activity", true).apply();
                     preferences.edit().putString("uri_count", "10").apply();
-                    preferences.edit().putBoolean("show_favorites", true).apply();
+                    preferences.edit().putBoolean("hide_favorites", false).apply();
                     Intent intent = new Intent(this, MainActivity.class);
                     startActivity(intent);
                     finish();

@@ -68,7 +68,7 @@ public class MainActivity extends AppCompatActivity {
 
         init();
         pager = (ViewPager) findViewById(R.id.main_pager);
-        pager.setAdapter(new MainPagerAdapter(getSupportFragmentManager(), !preferences.getBoolean("hide_favorites", true)));
+        pager.setAdapter(new MainPagerAdapter(getSupportFragmentManager(), !preferences.getBoolean("hide_favorites", false)));
     }
 
     @Override
