@@ -6,6 +6,7 @@ import android.preference.PreferenceActivity;
 import android.preference.PreferenceFragment;
 import android.support.annotation.Nullable;
 
+
 public class SettingsActivity extends PreferenceActivity {
 
     @Override
