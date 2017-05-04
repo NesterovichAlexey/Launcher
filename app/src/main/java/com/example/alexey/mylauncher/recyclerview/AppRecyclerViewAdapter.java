@@ -16,6 +16,7 @@ import com.example.alexey.mylauncher.R;
 
 import java.util.List;
 
+
 public class AppRecyclerViewAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     public static interface Type {
         static final int APP = 0;

@@ -23,6 +23,7 @@ import com.example.alexey.mylauncher.recyclerview.AppRecyclerViewAdapter;
 
 import java.util.ArrayList;
 
+
 public class MainFragment extends Fragment {
     private final static String PAGE_NUMBER = "page_number";
     private int pageNumber;

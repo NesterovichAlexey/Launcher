@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 
 import com.example.alexey.mylauncher.R;
 
+
 public class WelcomeFragment extends Fragment {
     private final static String PAGE_NUMBER = "page_number";
     private int pageNumber;

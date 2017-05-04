@@ -10,6 +10,7 @@ import android.provider.BaseColumns;
 
 import java.util.ArrayList;
 
+
 public class UriDatabaseHelper extends SQLiteOpenHelper {
     public static final int VERSION = 1;
     public static final String DB_NAME = "uri.dp";

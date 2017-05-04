@@ -2,6 +2,7 @@ package com.example.alexey.mylauncher.recyclerview;
 
 import android.graphics.drawable.Drawable;
 
+
 public class AppInfo {
     public CharSequence appName;
     public String packageName;

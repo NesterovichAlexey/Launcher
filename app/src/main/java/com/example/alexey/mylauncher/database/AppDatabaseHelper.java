@@ -14,6 +14,7 @@ import com.example.alexey.mylauncher.recyclerview.AppInfo;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+
 public class AppDatabaseHelper extends SQLiteOpenHelper {
     public static final int VERSION = 1;
     public static final String DB_NAME = "app.dp";

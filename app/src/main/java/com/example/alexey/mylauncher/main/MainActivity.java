@@ -35,6 +35,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
+
 public class MainActivity extends AppCompatActivity {
     private SharedPreferences preferences;
     private ViewPager pager;

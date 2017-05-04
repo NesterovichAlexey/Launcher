@@ -12,6 +12,7 @@ import android.widget.RadioButton;
 import com.example.alexey.mylauncher.main.MainActivity;
 import com.example.alexey.mylauncher.R;
 
+
 public class WelcomeActivity extends AppCompatActivity {
     private ViewPager pager;
     private SharedPreferences preferences;

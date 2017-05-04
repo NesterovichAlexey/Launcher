@@ -5,7 +5,6 @@ import android.util.AttributeSet;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 
-
 public class SquareLinearLayout extends LinearLayout {
     public SquareLinearLayout(Context context) {
         super(context);
