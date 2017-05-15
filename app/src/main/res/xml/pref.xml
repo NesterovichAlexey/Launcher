@@ -17,7 +17,7 @@
 
     <ListPreference
         android:key="column_count"
-        android:title="Количество елементов в ряду"
+        android:title="Количество элементов в ряду"
         android:entries="@array/column_count_entries"
         android:entryValues="@array/column_count_entry_values"/>
 

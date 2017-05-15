@@ -18,11 +18,13 @@ public class UriDatabaseHelper extends SQLiteOpenHelper {
 
     public static interface Columns extends BaseColumns {
         String FIELD_URI_NAME = "uri_name";
+        String FIELD_URI_TIME = "uri_time";
     }
     public static final String CREATE_TABLE_SCRIPT =
             "CREATE TABLE IF NOT EXISTS " + TABLE_NAME +
                     "(" +
-                    Columns.FIELD_URI_NAME + " TEXT" +
+                    Columns.FIELD_URI_NAME + " TEXT, " +
+                    Columns.FIELD_URI_TIME + " NUMBER " +
                     ")";
     public static final String DROP_TABLE_SCRIPT =
             "DROP TABLE IF EXISTS " + TABLE_NAME;
@@ -45,37 +47,5 @@ public class UriDatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         onUpgrade(db, oldVersion, newVersion);
-    }
-
-    public ArrayList<String> readRecords() {
-        ArrayList<String> list = new ArrayList<>();
-        try {
-            SQLiteDatabase db = getReadableDatabase();
-            Cursor cursor = db.query(
-                    TABLE_NAME,
-                    new String[]{Columns.FIELD_URI_NAME},
-                    null, null,
-                    null, null, null, null
-            );
-            int idColumnUri = cursor.getColumnIndex(Columns.FIELD_URI_NAME);
-            while (cursor.moveToNext()) {
-                list.add(cursor.getString(idColumnUri));
-            }
-            cursor.close();
-        } catch (SQLiteException ignored) {}
-        return list;
-    }
-
-    public void writeRecords(ArrayList<String> uriList) {
-        try {
-            SQLiteDatabase db = getWritableDatabase();
-            db.delete(TABLE_NAME, null, null);
-            for (String uri : uriList) {
-                ContentValues contentValues = new ContentValues();
-                contentValues.put(Columns.FIELD_URI_NAME, uri);
-                db.insert(TABLE_NAME, null, contentValues);
-            }
-            db.close();
-        } catch (SQLiteException ignored) {}
     }
 }
