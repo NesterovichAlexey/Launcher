@@ -1,10 +1,12 @@
 package com.example.alexey.mylauncher.main;
 
 import android.content.ActivityNotFoundException;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.provider.ContactsContract;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -23,8 +25,12 @@ import com.example.alexey.mylauncher.recyclerview.AppRecyclerViewAdapter;
 
 import java.util.ArrayList;
 
+import static android.app.Activity.RESULT_OK;
+
 
 public class MainFragment extends Fragment {
+    private static final Uri INSERT_URI = Uri.parse("content://com.example.alexey.mylauncher/uri/insert");
+
     private final static String PAGE_NUMBER = "page_number";
     private int pageNumber;
     private Toast toast;
@@ -74,10 +80,14 @@ public class MainFragment extends Fragment {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uriText.getText().toString()));
                         startActivity(intent);
-                        uriList.remove(uriText.getText().toString());
-                        adapter.remove(uriText.getText().toString());
-                        uriList.add(0, String.valueOf(uriText.getText()));
-                        adapter.insert(String.valueOf(uriText.getText()), 0);
+                        String s = uriText.getText().toString();
+                        uriList.remove(s);
+                        adapter.remove(s);
+                        uriList.add(0, s);
+                        adapter.insert(s, 0);
+                        ContentValues values = new ContentValues();
+                        values.put(UriDatabaseHelper.Columns.FIELD_URI_NAME, s);
+                        getContext().getContentResolver().insert(INSERT_URI, values);
                         int uriCount = Integer.parseInt(PreferenceManager.getDefaultSharedPreferences(view.getContext()).getString("uri_count", "10"));
                         while (uriList.size() > uriCount) {
                             adapter.remove(uriList.get(uriCount));

@@ -7,35 +7,33 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.provider.BaseColumns;
-import android.util.Pair;
 
 import com.example.alexey.mylauncher.recyclerview.ElementInfo;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 
 
-public class AppDatabaseHelper extends SQLiteOpenHelper {
+public class ContactsDatabaseHelper extends SQLiteOpenHelper {
     public static final int VERSION = 1;
-    public static final String DB_NAME = "app.dp";
-    public static final String TABLE_NAME = "app";
+    public static final String DB_NAME = "contacts.dp";
+    public static final String TABLE_NAME = "contacts";
 
     public static interface Columns extends BaseColumns {
-        String FIELD_PACKAGE_NAME = "package_name";
-        String FIELD_CLICK_COUNT = "click_count";
-        String FIELD_IS_FAVORITES = "is_favorites";
+        String FIELD_NAME = "name";
+        String FIELD_PHONE_NUMBER = "phone_number";
+        String FIELD_CONTACT_ID = "contact_id";
     }
     public static final String CREATE_TABLE_SCRIPT =
             "CREATE TABLE IF NOT EXISTS " + TABLE_NAME +
                     "(" +
-                    Columns.FIELD_PACKAGE_NAME + " TEXT, " +
-                    Columns.FIELD_CLICK_COUNT + " NUMBER, " +
-                    Columns.FIELD_IS_FAVORITES + " NUMBER" +
+                    Columns.FIELD_NAME + " TEXT, " +
+                    Columns.FIELD_PHONE_NUMBER + " TEXT, " +
+                    Columns.FIELD_CONTACT_ID + " TEXT " +
                     ")";
     public static final String DROP_TABLE_SCRIPT =
             "DROP TABLE IF EXISTS " + TABLE_NAME;
 
-    public AppDatabaseHelper(Context context) {
+    public ContactsDatabaseHelper(Context context) {
         super(context, DB_NAME, null, VERSION);
     }
 
@@ -55,39 +53,40 @@ public class AppDatabaseHelper extends SQLiteOpenHelper {
         onUpgrade(db, oldVersion, newVersion);
     }
 
-    public HashMap<String, Pair<Integer, Boolean>> readRecords() {
-        HashMap<String, Pair<Integer, Boolean>> map = new HashMap<>();
+    public ArrayList<ElementInfo> readRecords() {
+        ArrayList<ElementInfo> map = new ArrayList<>();
         try {
             SQLiteDatabase db = getReadableDatabase();
             Cursor cursor = db.query(
                     TABLE_NAME,
-                    new String[]{Columns.FIELD_PACKAGE_NAME, Columns.FIELD_CLICK_COUNT, Columns.FIELD_IS_FAVORITES},
+                    new String[]{Columns.FIELD_NAME, Columns.FIELD_PHONE_NUMBER, Columns.FIELD_CONTACT_ID},
                     null, null,
                     null, null, null, null
             );
-            int idColumnPackageName = cursor.getColumnIndex(Columns.FIELD_PACKAGE_NAME);
-            int idColumnClickCount = cursor.getColumnIndex(Columns.FIELD_CLICK_COUNT);
-            int idColumnIsFavorites = cursor.getColumnIndex(Columns.FIELD_IS_FAVORITES);
+            int idColumnName = cursor.getColumnIndex(Columns.FIELD_NAME);
+            int idColumnPhoneNumber = cursor.getColumnIndex(Columns.FIELD_PHONE_NUMBER);
+            int idColumnContactId = cursor.getColumnIndex(Columns.FIELD_CONTACT_ID);
             while (cursor.moveToNext()) {
-                String packageName = cursor.getString(idColumnPackageName);
-                int clickCount = cursor.getInt(idColumnClickCount);
-                boolean isFavorites = cursor.getInt(idColumnIsFavorites) == 1;
-                map.put(packageName, new Pair<>(clickCount, isFavorites));
+                String name = cursor.getString(idColumnName);
+                String phoneNumber = cursor.getString(idColumnPhoneNumber);
+                ElementInfo elementInfo = new ElementInfo(name, phoneNumber, null, false);
+                elementInfo.contactId = cursor.getString(idColumnContactId);
+                map.add(elementInfo);
             }
             cursor.close();
         } catch (SQLiteException ignored) {}
         return map;
     }
 
-    public void writeRecords(ArrayList<ElementInfo> appList) {
+    public void writeRecords(ArrayList<ElementInfo> contactsList) {
         try {
             SQLiteDatabase db = getWritableDatabase();
             db.delete(TABLE_NAME, null, null);
-            for (ElementInfo elementInfo : appList) {
+            for (ElementInfo elementInfo : contactsList) {
                 ContentValues contentValues = new ContentValues();
-                contentValues.put(Columns.FIELD_PACKAGE_NAME, elementInfo.packageName);
-                contentValues.put(Columns.FIELD_CLICK_COUNT, elementInfo.clickCount);
-                contentValues.put(Columns.FIELD_IS_FAVORITES, elementInfo.isFavorites ? 1 : 0);
+                contentValues.put(Columns.FIELD_NAME, (String) elementInfo.appName);
+                contentValues.put(Columns.FIELD_PHONE_NUMBER, elementInfo.packageName);
+                contentValues.put(Columns.FIELD_CONTACT_ID, elementInfo.contactId);
                 db.insert(TABLE_NAME, null, contentValues);
             }
             db.close();

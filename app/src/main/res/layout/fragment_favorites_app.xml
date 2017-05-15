@@ -11,14 +11,30 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:imeOptions="actionGo"
-        android:inputType="textUri"/>
+        android:inputType="textUri" />
 
     <android.support.v7.widget.RecyclerView
         android:id="@+id/app_favorite_list"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
         app:layoutManager="GridLayoutManager"
         app:spanCount="4"
+        android:layout_weight="1"
         tools:listitem="@layout/fragment_app" />
+
+    <Button
+        android:id="@+id/btn_add_contact"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/add_contact"
+        android:onClick="onClick"/>
+
+    <ToggleButton
+        android:id="@+id/btn_delete_contact"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textOff="@string/delete_contact"
+        android:textOn="@string/select_delete_contact"
+        android:onClick="onClick"/>
 
 </LinearLayout>

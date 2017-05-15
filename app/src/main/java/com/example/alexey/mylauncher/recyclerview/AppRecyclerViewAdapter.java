@@ -2,6 +2,9 @@ package com.example.alexey.mylauncher.recyclerview;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
+import android.provider.ContactsContract;
 import android.support.v7.widget.RecyclerView;
 import android.view.ContextMenu;
 import android.view.LayoutInflater;
@@ -10,6 +13,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ToggleButton;
 
 import com.example.alexey.mylauncher.main.MainActivity;
 import com.example.alexey.mylauncher.R;
@@ -22,16 +26,18 @@ public class AppRecyclerViewAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         static final int APP = 0;
         static final int HEADER = 1;
     }
+    private final Drawable photoDefault;
     private final MainActivity activity;
-    private final List<AppInfo> appList;
+    private final List<ElementInfo> appList;
     private CreateContextMenuListener createContextMenuListenerListener;
     private Toast toast;
 
-    public AppRecyclerViewAdapter(MainActivity activity, List<AppInfo> appList, CreateContextMenuListener createContextMenuListenerListener) {
+    public AppRecyclerViewAdapter(MainActivity activity, List<ElementInfo> appList, CreateContextMenuListener createContextMenuListenerListener) {
         this.activity = activity;
         this.appList = appList;
         this.createContextMenuListenerListener = createContextMenuListenerListener;
         setHasStableIds(true);
+        photoDefault = activity.getResources().getDrawable(R.drawable.phone);
     }
 
     @Override
@@ -62,7 +68,10 @@ public class AppRecyclerViewAdapter extends RecyclerView.Adapter<RecyclerView.Vi
             case Type.APP:
                 AppViewHolder avh = (AppViewHolder) holder;
                 avh.nameView.setText(appList.get(position).appName);
-                avh.iconView.setImageDrawable(appList.get(position).icon);
+                if (appList.get(position).icon != null)
+                    avh.iconView.setImageDrawable(appList.get(position).icon);
+                else
+                    avh.iconView.setImageDrawable(photoDefault);
                 break;
             case Type.HEADER:
                 HeaderViewHolder hvh = (HeaderViewHolder) holder;
@@ -106,16 +115,34 @@ public class AppRecyclerViewAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         @Override
         public void onClick(View v) {
             int position = getAdapterPosition();
-            activity.click(appList.get(position));
-            showToast(v.getContext(), (String) nameView.getText());
-            Intent intent = v.getContext().getPackageManager()
-                    .getLaunchIntentForPackage(appList.get(position).packageName);
+            Intent intent;
+            if (appList.get(position).isApp) {
+                activity.click(appList.get(position));
+                showToast(v.getContext(), (String) nameView.getText());
+                intent = v.getContext().getPackageManager()
+                        .getLaunchIntentForPackage(appList.get(position).packageName);
+            } else {
+                if (((ToggleButton)activity.findViewById(R.id.btn_delete_contact)).isChecked()) {
+                    activity.deleteContact(appList.get(position));
+                    return;
+                } else {
+                    intent = new Intent(Intent.ACTION_VIEW, Uri.parse("tel:" + appList.get(position).packageName));
+                }
+            }
             v.getContext().startActivity(intent);
         }
 
         @Override
         public boolean onLongClick(View v) {
-            v.showContextMenu();
+            int position = getAdapterPosition();
+            if (appList.get(position).isApp) {
+                v.showContextMenu();
+            } else {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                Uri uri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, appList.get(position).contactId);
+                intent.setData(uri);
+                v.getContext().startActivity(intent);
+            }
             return true;
         }
 
@@ -143,6 +170,6 @@ public class AppRecyclerViewAdapter extends RecyclerView.Adapter<RecyclerView.Vi
     }
 
     public interface CreateContextMenuListener {
-        public void create(ContextMenu menu, AppInfo appInfo);
+        public void create(ContextMenu menu, ElementInfo elementInfo);
     }
 }
