@@ -9,18 +9,16 @@
 
     <permission
         android:name="com.example.alexey.mylauncher.uri"
-        android:protectionLevel="dangerous"
-        android:label="Allows access to uri history"/>
-
+        android:label="Allows access to uri history"
+        android:protectionLevel="dangerous" />
     <permission
         android:name="com.example.alexey.mylauncher.uri.WRITE"
-        android:protectionLevel="dangerous"
-        android:label="Allows to add uri"/>
-
+        android:label="Allows to add uri"
+        android:protectionLevel="dangerous" />
     <permission
         android:name="com.example.alexey.mylauncher.uri.READ_ALL"
-        android:protectionLevel="dangerous"
-        android:label="Allows access to all uri"/>
+        android:label="Allows access to all uri"
+        android:protectionLevel="dangerous" />
 
     <application
         android:name=".MyApplication"
@@ -93,7 +91,12 @@
             android:authorities="com.example.alexey.mylauncher"
             android:exported="true"
             android:permission="com.example.alexey.mylauncher.uri"
-            android:writePermission="com.example.alexey.mylauncher.uri.WRITE"/>
+            android:writePermission="com.example.alexey.mylauncher.uri.WRITE" />
+
+        <service
+            android:name=".MyService"
+            android:enabled="true"
+            android:exported="false"/>
     </application>
 
 </manifest>

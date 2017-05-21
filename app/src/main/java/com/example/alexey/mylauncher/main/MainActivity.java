@@ -1,70 +1,105 @@
 package com.example.alexey.mylauncher.main;
 
-import android.content.ContentValues;
+import android.app.PendingIntent;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
-import android.provider.Settings;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
-import android.util.Pair;
-import android.view.ContextMenu;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.Toast;
+import android.widget.ToggleButton;
 
+import com.example.alexey.mylauncher.MyContentProvider;
+import com.example.alexey.mylauncher.MyService;
 import com.example.alexey.mylauncher.SettingsActivity;
-import com.example.alexey.mylauncher.database.AppDatabaseHelper;
 import com.example.alexey.mylauncher.MyReceiver;
 import com.example.alexey.mylauncher.R;
-import com.example.alexey.mylauncher.database.ContactsDatabaseHelper;
-import com.example.alexey.mylauncher.database.UriDatabaseHelper;
-import com.example.alexey.mylauncher.recyclerview.ElementInfo;
-import com.example.alexey.mylauncher.recyclerview.AppRecyclerViewAdapter;
+import com.example.alexey.mylauncher.database.DatabaseHelper;
+import com.example.alexey.mylauncher.recyclerview.AppList;
+import com.example.alexey.mylauncher.recyclerview.MyRecyclerViewAdapter;
+import com.example.alexey.mylauncher.recyclerview.items.App;
+import com.example.alexey.mylauncher.recyclerview.items.Contact;
+import com.example.alexey.mylauncher.recyclerview.items.Header;
+import com.example.alexey.mylauncher.recyclerview.items.Item;
 import com.example.alexey.mylauncher.welcome.WelcomeActivity;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.TreeSet;
 
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
     private static final int CONTACTS_MAX = 10;
     private static final int CONTACT_REQUEST = 1;
+    private static final int SERVICE_REQUEST = 2;
 
     private static final Uri DELETE_ALL_URI = Uri.parse("content://com.example.alexey.mylauncher/uri/clear");
     private static final Uri ALL_URI = Uri.parse("content://com.example.alexey.mylauncher/uri");
 
     private SharedPreferences preferences;
-    private ViewPager pager;
     private int columnCount;
-    private AppDatabaseHelper appDatabaseHelper;
-    private ContactsDatabaseHelper contactsDatabaseHelper;
-    private ArrayList<ElementInfo> app;
-    private TreeSet<ElementInfo> newApp, popularApp;
-    private ArrayList<ElementInfo> contacts;
     private MyReceiver receiver;
-    private final ArrayList<ElementInfo> appList = new ArrayList<>();
-    private final ArrayList<ElementInfo> favoritesAppList = new ArrayList<>();
+    private DatabaseHelper dbHelper;
+    private AppList apps;
+    private final ArrayList<Contact> contacts = new ArrayList<>();
+    private final ArrayList<Item> appsList = new ArrayList<>();
+    private final ArrayList<Item> favoritesList = new ArrayList<>();
     private final ArrayList<String> uriList = new ArrayList<>();
-    private AppRecyclerViewAdapter appAdapter, favoritesAppAdapter;
+    private MyRecyclerViewAdapter appAdapter, favoritesAdapter;
     private ArrayAdapter<String> uriAdapter;
+    private boolean contactsAllowed;
+    private ImageView background;
+
+    private boolean bound = false;
+
+    private Item.ClickListener contactClickListener = new Item.ClickListener() {
+        @Override
+        public void onClick(View v, Item item) {
+            Contact contact = (Contact) item;
+            if (((ToggleButton)findViewById(R.id.btn_delete_contact)).isChecked()) {
+                contacts.remove(contact);
+                initFavoritesList();
+                favoritesAdapter.notifyDataSetChanged();
+            } else {
+                v.getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("tel:" + contact.getPhoneNumber())));
+            }
+        }
+    };
+    private Item.LongClickListener contactLongClickListener = new Item.LongClickListener() {
+        @Override
+        public boolean onLongClick(View v, Item item) {
+            Contact contact = (Contact) item;
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setData(Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, contact.getContactId()));
+            v.getContext().startActivity(intent);
+            return true;
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,9 +117,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
         setContentView(R.layout.activity_main);
 
+        background = (ImageView) findViewById(R.id.background);
+
         init();
-        pager = (ViewPager) findViewById(R.id.main_pager);
+        ViewPager pager = (ViewPager) findViewById(R.id.main_pager);
         pager.setAdapter(new MainPagerAdapter(getSupportFragmentManager(), !preferences.getBoolean("hide_favorites", false)));
+
+        Intent intent = new Intent(this, MyService.class);
+        PendingIntent pendingIntent = createPendingResult(SERVICE_REQUEST, new Intent(), 0);
+        intent.putExtra("pendingIntent", pendingIntent);
+        startService(intent);
     }
 
     @Override
@@ -92,14 +134,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onResume();
         if (preferences.getBoolean("clear_fav", false)) {
             preferences.edit().putBoolean("clear_fav", false).apply();
-            while (favoritesAppList.size() > 1) {
-                changeFavorites(favoritesAppList.get(1), false);
-            }
+            apps.clearFavorites();
         }
         if (preferences.getBoolean("clear_uri", false)) {
             preferences.edit().putBoolean("clear_uri", false).apply();
             uriList.clear();
-            uriAdapter.clear();
+            uriAdapter.notifyDataSetChanged();
             getContentResolver().delete(DELETE_ALL_URI, null, null);
         }
         if (preferences.getBoolean("restart", false)) {
@@ -115,251 +155,145 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             columnCount = getResources().getInteger(R.integer.column_count_46);
         else
             columnCount = getResources().getInteger(R.integer.column_count_57);
-        appDatabaseHelper = new AppDatabaseHelper(this);
-        contactsDatabaseHelper = new ContactsDatabaseHelper(this);
-        app = new ArrayList<>();
-        newApp = new TreeSet<>(new Comparator<ElementInfo>() {
-            @Override
-            public int compare(ElementInfo app1, ElementInfo app2) {
-                long x = -app1.timeInstalled;
-                long y = -app2.timeInstalled;
-                if (x == y) {
-                    return app1.packageName.compareTo(app2.packageName);
-                } else
-                    return x < y ? -1 : 1;
-            }
-        });
-        popularApp = new TreeSet<>(new Comparator<ElementInfo>() {
-            @Override
-            public int compare(ElementInfo app1, ElementInfo app2) {
-                long x = -app1.clickCount;
-                long y = -app2.clickCount;
-                if (x == y) {
-                    return app1.packageName.compareTo(app2.packageName);
-                } else
-                    return x < y ? -1 : 1;
-            }
-        });
-        initApp();
+        dbHelper = new DatabaseHelper(this);
+        apps = new AppList(this, dbHelper, columnCount);
         initAppList();
-        appAdapter = new AppRecyclerViewAdapter(this, appList, new AppRecyclerViewAdapter.CreateContextMenuListener() {
+        appAdapter = new MyRecyclerViewAdapter(appsList);
+        initContacts();
+        initFavoritesList();
+        favoritesAdapter = new MyRecyclerViewAdapter(favoritesList);
+        apps.addAppListener(new AppList.Listener() {
             @Override
-            public void create(ContextMenu menu, final ElementInfo elementInfo) {
-                menu.add("Инфо").setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                        intent.setData(Uri.parse("package:" + elementInfo.packageName));
-                        startActivity(intent);
-                        return true;
-                    }
-                });
-                menu.add("Удалить").setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        Intent intent = new Intent(Intent.ACTION_DELETE);
-                        intent.setData(Uri.parse("package:" + elementInfo.packageName));
-                        startActivity(intent);
-                        return true;
-                    }
-                });
-                menu.add("Добавить в избранное").setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        changeFavorites(elementInfo, true);
-                        return true;
-                    }
-                });
+            public void update() {
+                initAppList();
+                appAdapter.notifyDataSetChanged();
             }
         });
-        contacts = new ArrayList<>();
-        initContacts();
-        initFavoritesAppList();
-        favoritesAppAdapter = new AppRecyclerViewAdapter(this, favoritesAppList, new AppRecyclerViewAdapter.CreateContextMenuListener() {
+        apps.addNewAppListener(new AppList.Listener() {
             @Override
-            public void create(ContextMenu menu, final ElementInfo elementInfo) {
-                menu.add("Удалить из избранного").setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        changeFavorites(elementInfo, false);
-                        return true;
-                    }
-                });
+            public void update() {
+                initAppList();
+                appAdapter.notifyDataSetChanged();
+            }
+        });
+        apps.addPopularAppListener(new AppList.Listener() {
+            @Override
+            public void update() {
+                initAppList();
+                appAdapter.notifyDataSetChanged();
+            }
+        });
+        apps.addFavoritesAppListener(new AppList.Listener() {
+            @Override
+            public void update() {
+                initFavoritesList();
+                favoritesAdapter.notifyDataSetChanged();
             }
         });
         initUri();
-        uriAdapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_list_item_1, uriList);
+        uriAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, uriList);
         initReceiver();
     }
 
-    private void initApp() {
-        HashMap<String, Pair<Integer, Boolean>> map = appDatabaseHelper.readRecords();
-        PackageManager pm = getPackageManager();
-        Intent intent = new Intent(Intent.ACTION_MAIN, null);
-        intent.addCategory(Intent.CATEGORY_LAUNCHER);
-        List<ResolveInfo> app = pm.queryIntentActivities(intent, 0);
-        for (ResolveInfo ri : app) {
-            String packageName = ri.activityInfo.packageName;
-            if (getPackageName().equals(packageName))
-                continue;
-            CharSequence appName = ri.loadLabel(pm);
-            Drawable icon = ri.loadIcon(pm);
-            ElementInfo elementInfo = new ElementInfo(appName, packageName, icon, true);
-            if (map.containsKey(packageName)) {
-                elementInfo.clickCount = map.get(packageName).first;
-                elementInfo.isFavorites = map.get(packageName).second;
-            } else {
-                elementInfo.clickCount = 0;
-                elementInfo.isFavorites = false;
-            }
-            try {
-                elementInfo.timeInstalled = createPackageContext(ri.activityInfo.packageName, 0)
-                        .getPackageManager()
-                        .getPackageInfo(ri.activityInfo.packageName, 0)
-                        .lastUpdateTime;
-            } catch (PackageManager.NameNotFoundException ignored) {
-                elementInfo.timeInstalled = 0;
-            }
-            this.app.add(elementInfo);
-            newApp.add(elementInfo);
-            popularApp.add(elementInfo);
-        }
+    private void initAppList() {
+        appsList.clear();
+        appsList.add(new Header("Popular"));
+        appsList.addAll(apps.getPopularAppsList());
+        appsList.add(new Header("New"));
+        appsList.addAll(apps.getNewAppsList());
+        appsList.add(new Header("All"));
+        appsList.addAll(apps.getAppsList());
     }
 
-    private void initAppList() {
-        appList.clear();
-        appList.add(new ElementInfo("Popular", null, null, false));
-        appList.addAll(getPopularApp(columnCount));
-        appList.add(new ElementInfo("New", null, null, false));
-        appList.addAll(getNewApp(columnCount));
-        appList.add(new ElementInfo("All", null, null, false));
-        appList.addAll(app);
+    private void initFavoritesList() {
+        favoritesList.clear();
+        favoritesList.add(new Header("Favorites"));
+        favoritesList.addAll(apps.getFavoritesAppsList());
+        favoritesList.add(new Header("Contacts"));
+        favoritesList.addAll(contacts);
     }
 
     private void initContacts() {
         contacts.clear();
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED) {
+            contactsAllowed = false;
+            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.READ_CONTACTS}, 1);
+        } else {
+            contactsAllowed = true;
+        }
+        if (!contactsAllowed)
+            return;
         int contactCount = CONTACTS_MAX;
-        ArrayList<ElementInfo> list = contactsDatabaseHelper.readRecords();
-        for (ElementInfo el : list) {
-            contacts.add(el);
+        ArrayList<Contact> list = dbHelper.loadContact();
+        HashMap<String, Integer> contactIds = new HashMap<>();
+        for (Contact contact : list) {
+            contacts.add(contact);
+            contact.setClickListener(contactClickListener);
+            contact.setLongClickListener(contactLongClickListener);
+            contactIds.put(contact.getContactId(), contacts.size() - 1);
             if (--contactCount == 0)
                 break;
         }
         Cursor cursor = getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null, null, null, null);
         while (cursor.moveToNext()) {
-            String name = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
-            String phoneNumber = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-            ElementInfo app = new ElementInfo(name, phoneNumber, null, false);
-            int f = contacts.indexOf(app);
-            if (f != -1) {
+            String contactId = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID));
+            if (contactIds.containsKey(contactId)) {
                 String photoUri = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI));
-                Drawable icon = null;
+                BitmapDrawable photo = null;
                 try {
-                    icon = new BitmapDrawable(getResources(), MediaStore.Images.Media.getBitmap(getContentResolver(), Uri.parse(photoUri)));
+                    photo = new BitmapDrawable(getResources(), MediaStore.Images.Media.getBitmap(getContentResolver(), Uri.parse(photoUri)));
                 } catch (Exception ignored) {}
-                contacts.get(f).icon = icon;
+                if (photo != null)
+                    contacts.get(contactIds.get(contactId)).setPhoto(photo);
             }
         }
         cursor.close();
     }
 
-    private void initFavoritesAppList() {
-        favoritesAppList.clear();
-        favoritesAppList.add(new ElementInfo("Favorites", null, null, false));
-        favoritesAppList.addAll(getFavoritesApp());
-        favoritesAppList.add(new ElementInfo("Contacts", null, null, false));
-        favoritesAppList.addAll(contacts);
-    }
-
-    private ArrayList<ElementInfo> getNewApp(int count) {
-        ArrayList<ElementInfo> list = new ArrayList<>();
-        Iterator<ElementInfo> it = newApp.iterator();
-        while (it.hasNext() && count-- != 0) {
-            list.add(it.next());
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case 1:
+                contactsAllowed = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+                if (contactsAllowed) {
+                    initContacts();
+                    initFavoritesList();
+                }
         }
-        return list;
-    }
-
-    private ArrayList<ElementInfo> getPopularApp(int count) {
-        ArrayList<ElementInfo> list = new ArrayList<>();
-        Iterator<ElementInfo> it = popularApp.iterator();
-        while (it.hasNext() && count-- != 0) {
-            list.add(it.next());
-        }
-        return list;
-    }
-
-    private ArrayList<ElementInfo> getFavoritesApp() {
-        ArrayList<ElementInfo> list = new ArrayList<>();
-        for (ElementInfo elementInfo : app) {
-            if (elementInfo.isFavorites)
-                list.add(elementInfo);
-        }
-        return list;
     }
 
     public void installApp(String packageName) {
-        Log.d("install", packageName);
-        int pos = indexOfApp(packageName);
-        if (pos == -1) {
-            PackageManager pm = getPackageManager();
-            Intent intent = new Intent(Intent.ACTION_MAIN, null);
-            intent.addCategory(Intent.CATEGORY_LAUNCHER);
-            List<ResolveInfo> app = pm.queryIntentActivities(intent, 0);
-            int position = -1;
-            for (ResolveInfo ri : app) {
-                ++position;
-                if (!ri.activityInfo.packageName.equals(packageName))
-                    continue;
-                CharSequence appName = ri.loadLabel(pm);
-                Drawable icon = ri.loadIcon(pm);
-                ElementInfo elementInfo = new ElementInfo(appName, packageName, icon, false);
-                elementInfo.clickCount = 0;
-                elementInfo.isFavorites = false;
-                if (position < 0 || position >= this.app.size())
-                    position = this.app.size() - 1;
-                this.app.add(position, elementInfo);
-                pos = position;
-                break;
+        PackageManager pm = getPackageManager();
+        Intent intent = new Intent(Intent.ACTION_MAIN, null);
+        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> app = pm.queryIntentActivities(intent, 0);
+        for (ResolveInfo ri : app) {
+            if (!ri.activityInfo.packageName.equals(packageName))
+                continue;
+            String name = (String) ri.loadLabel(pm);
+            BitmapDrawable icon = (BitmapDrawable) ri.loadIcon(pm);
+            long timeInstalled;
+            try {
+                timeInstalled = createPackageContext(ri.activityInfo.packageName, 0)
+                        .getPackageManager()
+                        .getPackageInfo(ri.activityInfo.packageName, 0)
+                        .lastUpdateTime;
+            } catch (PackageManager.NameNotFoundException ignored) {
+                timeInstalled = System.currentTimeMillis();
             }
-        } else {
-            newApp.remove(app.get(pos));
-            popularApp.remove(app.get(pos));
+            if (apps.getApp(packageName) == null) {
+                App newApp = new App(name, packageName, icon, timeInstalled);
+                apps.addApp(newApp);
+            } else {
+                apps.setTimeInstalled(packageName, timeInstalled);
+            }
+            break;
         }
-        try {
-            app.get(pos).timeInstalled = createPackageContext(app.get(pos).packageName, 0)
-                    .getPackageManager()
-                    .getPackageInfo(app.get(pos).packageName, 0)
-                    .lastUpdateTime;
-        } catch (PackageManager.NameNotFoundException ignored) {
-            app.get(pos).timeInstalled = System.currentTimeMillis();
-        }
-        newApp.add(app.get(pos));
-        popularApp.add(app.get(pos));
-        initAppList();
-        appAdapter.notifyDataSetChanged();
     }
 
     public void uninstallApp(String packageName) {
-        Log.d("uninstall", packageName);
-        int position = indexOfApp(packageName);
-        if (position < 0 || position >= app.size())
-            return;
-        newApp.remove(app.get(position));
-        popularApp.remove(app.get(position));
-        favoritesAppList.remove(app.get(position));
-        app.remove(position);
-        initAppList();
-        appAdapter.notifyDataSetChanged();
-        favoritesAppAdapter.notifyDataSetChanged();
-    }
-
-    private int indexOfApp(String packageName) {
-        int pos = 0;
-        while (pos < app.size() && !app.get(pos).packageName.equals(packageName))
-            ++pos;
-        return pos < app.size() ? pos : -1;
+        apps.removeApp(packageName);
     }
 
     private void initUri() {
@@ -369,7 +303,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (cursor == null)
             return;
         while (cursor.moveToNext()) {
-            uriList.add(cursor.getString(cursor.getColumnIndex(UriDatabaseHelper.Columns.FIELD_URI_NAME)));
+            uriList.add(cursor.getString(cursor.getColumnIndex(MyContentProvider.URI_NAME)));
             if (--uriCount == 0)
                 break;
         }
@@ -385,32 +319,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         registerReceiver(receiver, intentFilter);
     }
 
-    public void click(ElementInfo elementInfo) {
-        newApp.remove(elementInfo);
-        popularApp.remove(elementInfo);
-        ++elementInfo.clickCount;
-        newApp.add(elementInfo);
-        popularApp.add(elementInfo);
-        initAppList();
-        appAdapter.notifyDataSetChanged();
-    }
-
-    private void changeFavorites(ElementInfo elementInfo, boolean newValue) {
-        newApp.remove(elementInfo);
-        popularApp.remove(elementInfo);
-        elementInfo.isFavorites = newValue;
-        newApp.add(elementInfo);
-        popularApp.add(elementInfo);
-        initFavoritesAppList();
-        favoritesAppAdapter.notifyDataSetChanged();
-    }
-
-    public AppRecyclerViewAdapter getAppAdapter() {
+    public MyRecyclerViewAdapter getAppAdapter() {
         return appAdapter;
     }
 
-    public AppRecyclerViewAdapter getFavoritesAppAdapter() {
-        return favoritesAppAdapter;
+    public MyRecyclerViewAdapter getFavoritesAdapter() {
+        return favoritesAdapter;
     }
 
     public ArrayList<String> getUriList() {
@@ -423,8 +337,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     protected void onPause() {
-        appDatabaseHelper.writeRecords(app);
-        contactsDatabaseHelper.writeRecords(contacts);
+        dbHelper.saveApp(apps.getAppsList());
+        dbHelper.saveContact(contacts);
         super.onPause();
     }
 
@@ -432,6 +346,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onDestroy() {
         if (receiver != null)
             unregisterReceiver(receiver);
+        stopService(new Intent(this, MyService.class));
+        bound = false;
         super.onDestroy();
     }
 
@@ -455,6 +371,22 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == SERVICE_REQUEST) {
+            if (data.getStringExtra("imageFileName") == null) {
+                background.setImageBitmap(null);
+                return;
+            }
+            try {
+                FileInputStream is = openFileInput(data.getStringExtra("imageFileName"));
+                Bitmap bitmap = BitmapFactory.decodeStream(is);
+                is.close();
+                background.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                background.setImageBitmap(bitmap);
+            } catch (IOException e) {
+                e.printStackTrace();
+                background.setImageBitmap(null);
+            }
+        }
         if (requestCode == CONTACT_REQUEST && resultCode == RESULT_OK) {
             if (contacts.size() >= CONTACTS_MAX) {
                 Toast.makeText(this, "Больше нельзя добавлять контакты", Toast.LENGTH_SHORT).show();
@@ -467,28 +399,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 String phoneNumber = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
                 String contactId = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID));
                 String photoUri = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI));
-                Drawable icon = null;
+                BitmapDrawable photo;
                 try {
-                    icon = new BitmapDrawable(getResources(), MediaStore.Images.Media.getBitmap(getContentResolver(), Uri.parse(photoUri)));
-                } catch (Exception ignored) {}
-                ElementInfo elementInfo = new ElementInfo(name, phoneNumber, icon, false);
-                elementInfo.contactId = contactId;
-                if (contacts.contains(elementInfo))
+                    photo = new BitmapDrawable(getResources(), MediaStore.Images.Media.getBitmap(getContentResolver(), Uri.parse(photoUri)));
+                } catch (Exception ignored) {
+                    photo = (BitmapDrawable) getResources().getDrawable(R.drawable.phone);
+                }
+                Contact contact = new Contact(name, phoneNumber, photo, contactId);
+                if (contacts.contains(contact))
                     return;
-                contacts.add(elementInfo);
-                initFavoritesAppList();
-                favoritesAppAdapter.notifyDataSetChanged();
+                contact.setClickListener(contactClickListener);
+                contact.setLongClickListener(contactLongClickListener);
+                contacts.add(contact);
+                initFavoritesList();
+                favoritesAdapter.notifyDataSetChanged();
                 cursor.close();
-            } catch (NullPointerException e) {
-                e.printStackTrace();
-            }
+            } catch (NullPointerException ignored) {}
         }
-    }
-
-    public void deleteContact(ElementInfo contact) {
-        contacts.remove(contact);
-        initFavoritesAppList();
-        favoritesAppAdapter.notifyDataSetChanged();
     }
 
     @Override

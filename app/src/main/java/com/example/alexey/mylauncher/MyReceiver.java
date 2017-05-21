@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 
 import com.example.alexey.mylauncher.main.MainActivity;
-import com.example.alexey.mylauncher.main.MainFragment;
 
 
 public class MyReceiver extends BroadcastReceiver {
@@ -23,6 +22,6 @@ public class MyReceiver extends BroadcastReceiver {
     }
 
     public void setActivity(MainActivity activity) {
-        this.activity = activity;
+        MyReceiver.activity = activity;
     }
 }

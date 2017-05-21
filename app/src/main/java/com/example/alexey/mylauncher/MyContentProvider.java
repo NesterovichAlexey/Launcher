@@ -14,12 +14,13 @@ import android.os.Process;
 import android.support.annotation.NonNull;
 import android.support.v4.content.PermissionChecker;
 
-import com.example.alexey.mylauncher.database.UriDatabaseHelper;
+import com.example.alexey.mylauncher.database.DatabaseHelper;
 
 public class MyContentProvider extends ContentProvider {
-    private static final int MILLIS_IN_DAY = 1000 * 60 * 60 * 24;
     private static final String AUTHORITY = "com.example.alexey.mylauncher";
     private static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/uri");
+
+    public static final String URI_NAME = "name";
 
     private static final String ALL_URI_PATH = "uri";
     private static final int ALL_URI_CODE = 1;
@@ -42,15 +43,13 @@ public class MyContentProvider extends ContentProvider {
         uriMatcher.addURI(AUTHORITY, CLEAR_URI_PATH, CLEAR_URI_CODE);
     }
 
-    private UriDatabaseHelper dbHelper;
+    private DatabaseHelper dbHelper;
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         if (uriMatcher.match(uri) != CLEAR_URI_CODE)
             throw new IllegalArgumentException("Wrong URI: " + uri);
-        SQLiteDatabase db = dbHelper.getWritableDatabase();
-        db.delete(UriDatabaseHelper.TABLE_NAME, null, null);
-        db.close();
+        dbHelper.deleteUri();
         return 0;
     }
 
@@ -63,54 +62,33 @@ public class MyContentProvider extends ContentProvider {
     public Uri insert(Uri uri, ContentValues values) {
         if (uriMatcher.match(uri) != INSERT_URI_CODE)
             throw new IllegalArgumentException("Wrong URI: " + uri);
-        if (values.getAsString(UriDatabaseHelper.Columns.FIELD_URI_NAME) == null)
+        if (values.getAsString(URI_NAME) == null)
             throw new IllegalArgumentException("Wrong values");
-        SQLiteDatabase db = dbHelper.getWritableDatabase();
-        db.delete(UriDatabaseHelper.TABLE_NAME,
-                UriDatabaseHelper.Columns.FIELD_URI_NAME + " = ?",
-                new String[]{values.getAsString(UriDatabaseHelper.Columns.FIELD_URI_NAME)});
-        ContentValues cv = new ContentValues();
-        cv.put(UriDatabaseHelper.Columns.FIELD_URI_NAME, values.getAsString(UriDatabaseHelper.Columns.FIELD_URI_NAME));
-        cv.put(UriDatabaseHelper.Columns.FIELD_URI_TIME, System.currentTimeMillis());
-        long id = db.insert(UriDatabaseHelper.TABLE_NAME, null, cv);
-        db.close();
+        long id = dbHelper.insertUri(values.getAsString("name"));
         return ContentUris.withAppendedId(CONTENT_URI, id);
     }
 
     @Override
     public boolean onCreate() {
-        dbHelper = new UriDatabaseHelper(getContext());
+        dbHelper = new DatabaseHelper(getContext());
         return true;
     }
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection,
                         String[] selectionArgs, String sortOrder) {
-        SQLiteDatabase db = dbHelper.getReadableDatabase();
-        String tableName = UriDatabaseHelper.TABLE_NAME;
-        projection = new String[]{UriDatabaseHelper.Columns.FIELD_URI_NAME};
-        sortOrder = UriDatabaseHelper.Columns.FIELD_URI_TIME + " DESC";
-        String limits = null;
         switch (uriMatcher.match(uri)) {
             case ALL_URI_CODE:
                 if (getContext() == null || checkCallingPermission(getContext(), Manifest.permission.READ_ALL, null) != PermissionChecker.PERMISSION_GRANTED)
                     throw new SecurityException("Permission Denial");
-                selection = null;
-                selectionArgs = null;
-                break;
+                return dbHelper.getAllUri();
             case LAST_URI_CODE:
-                selection = null;
-                selectionArgs = null;
-                limits = "1";
-                break;
+                return dbHelper.getLastUri();
             case TODAY_URI_CODE:
-                selection = UriDatabaseHelper.Columns.FIELD_URI_TIME + " >= ?";
-                selectionArgs = new String[]{String.valueOf(System.currentTimeMillis() / MILLIS_IN_DAY * MILLIS_IN_DAY)};
-                break;
+                return dbHelper.getTodayUri();
             default:
                 throw new IllegalArgumentException("Wrong URI: " + uri);
         }
-        return db.query(tableName, projection, selection, selectionArgs, null, null, sortOrder, limits);
     }
 
     private int checkCallingPermission(@NonNull Context context, @NonNull String permission, String packageName) {

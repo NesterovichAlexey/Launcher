@@ -6,7 +6,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
-import android.provider.ContactsContract;
+import android.support.annotation.NonNull;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -19,13 +19,11 @@ import android.widget.AutoCompleteTextView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.example.alexey.mylauncher.MyContentProvider;
 import com.example.alexey.mylauncher.R;
-import com.example.alexey.mylauncher.database.UriDatabaseHelper;
-import com.example.alexey.mylauncher.recyclerview.AppRecyclerViewAdapter;
+import com.example.alexey.mylauncher.recyclerview.items.ItemType;
 
 import java.util.ArrayList;
-
-import static android.app.Activity.RESULT_OK;
 
 
 public class MainFragment extends Fragment {
@@ -68,7 +66,7 @@ public class MainFragment extends Fragment {
         return view;
     }
 
-    private void initUri(final View view) {
+    private void initUri(@NonNull final View view) {
         final AutoCompleteTextView uriText = (AutoCompleteTextView) view.findViewById(R.id.uri_text);
         final ArrayList<String> uriList = ((MainActivity)getActivity()).getUriList();
         final ArrayAdapter<String> adapter = ((MainActivity)getActivity()).getUriAdapter();
@@ -86,7 +84,7 @@ public class MainFragment extends Fragment {
                         uriList.add(0, s);
                         adapter.insert(s, 0);
                         ContentValues values = new ContentValues();
-                        values.put(UriDatabaseHelper.Columns.FIELD_URI_NAME, s);
+                        values.put(MyContentProvider.URI_NAME, s);
                         getContext().getContentResolver().insert(INSERT_URI, values);
                         int uriCount = Integer.parseInt(PreferenceManager.getDefaultSharedPreferences(view.getContext()).getString("uri_count", "10"));
                         while (uriList.size() > uriCount) {
@@ -114,7 +112,7 @@ public class MainFragment extends Fragment {
         switch (pageNumber) {
             case 1:
                 list = (RecyclerView) view.findViewById(R.id.app_favorite_list);
-                list.setAdapter(((MainActivity)getActivity()).getFavoritesAppAdapter());
+                list.setAdapter(((MainActivity)getActivity()).getFavoritesAdapter());
                 break;
             default:
                 list = (RecyclerView) view.findViewById(R.id.app_list);
@@ -130,14 +128,13 @@ public class MainFragment extends Fragment {
         ((GridLayoutManager)list.getLayoutManager()).setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
             @Override
             public int getSpanSize(int position) {
-                switch (list.getAdapter().getItemViewType(position)) {
-                    case AppRecyclerViewAdapter.Type.APP:
-                        return 1;
-                    case AppRecyclerViewAdapter.Type.HEADER:
-                        return columnCount;
-                    default:
-                        return 0;
+                if (list.getAdapter().getItemViewType(position) == ItemType.CONTACT.getId()
+                        || list.getAdapter().getItemViewType(position) == ItemType.APP.getId()) {
+                    return 1;
+                } else if (list.getAdapter().getItemViewType(position) == ItemType.HEADER.getId()) {
+                    return columnCount;
                 }
+                return 0;
             }
         });
     }
