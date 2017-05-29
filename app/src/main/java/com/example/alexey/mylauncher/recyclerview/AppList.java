@@ -134,7 +134,7 @@ public class AppList {
     };
     //------------------------------------------------------------------//
 
-    public AppList(@NonNull Context context, @NonNull DatabaseHelper dbHelper, int columnCount) {
+    public AppList(Context context, DatabaseHelper dbHelper, int columnCount) {
         this.context = context;
         this.dbHelper = dbHelper;
         this.columnCount = columnCount;
@@ -174,9 +174,13 @@ public class AppList {
     }
 
     private void initApp() {
-        for (App app : dbHelper.loadApp()) {
-            addApp(app);
+        if (dbHelper != null) {
+            for (App app : dbHelper.loadApp()) {
+                addApp(app);
+            }
         }
+        if (context == null)
+            return;
         PackageManager pm = context.getPackageManager();
         Intent intent = new Intent(Intent.ACTION_MAIN, null);
         intent.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -214,7 +218,6 @@ public class AppList {
         newApps.add(new Pair<>(app.getTimeInstalled(), app.getPackageName()));
         popularApps.add(new Pair<>(app.getClickCount(), app.getPackageName()));
         updateAppsList();
-        updateNewAppsList();
         updateNewAppsList();
         if (app.isFavorites()) {
             favorites.add(app.getPackageName());
