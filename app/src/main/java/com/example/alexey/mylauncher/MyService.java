@@ -52,7 +52,8 @@ public class MyService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        this.pi = intent.getParcelableExtra("pendingIntent");
+        if (intent != null)
+            this.pi = intent.getParcelableExtra("pendingIntent");
         if (run != null)
             run.stop();
         es.execute(run = new MyRun());
@@ -91,6 +92,8 @@ public class MyService extends Service {
             if (size != 0)
                 intent.putExtra("imageFileName", (cur % size) + ".png");
             try {
+                if (pi == null)
+                    return;
                 pi.send(MyService.this, 0, intent);
                 lastSendImage = System.currentTimeMillis();
                 preference.edit().putLong(LAST_SEND_IMAGE, lastSendImage).apply();

@@ -208,6 +208,11 @@ public class AppList {
             App newApp = new App(name, packageName, icon, timeInstalled);
             addApp(newApp);
         }
+        ArrayList<App> list = (ArrayList<App>) getAppsList().clone();
+        for (App app1 : list) {
+            if (app1.getIcon() == null)
+                removeApp(app1.getPackageName());
+        }
     }
 
     public void addApp(@NonNull App app) {
